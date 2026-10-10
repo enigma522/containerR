@@ -1,0 +1,32 @@
+minimumLimaVersion: "2.0.0"
+
+base:
+  - template:docker-rootful
+
+vmType: vz
+arch: aarch64
+
+cpus: 4
+memory: "4GiB"
+disk: "30GiB"
+
+# virtiofs is the fast file-sharing mechanism between Mac and the Lima Linux VM
+mountType: virtiofs
+mounts:
+  - location: "/Users/available/perso/containerR"
+    mountPoint: "/Users/available/perso/containerR"
+    writable: true
+
+vmOpts:
+    vz:
+      rosetta:
+        enabled: true
+        binfmt: true
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      apt-get update
+      apt-get install -y golang-go
