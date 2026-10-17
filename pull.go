@@ -1,24 +1,18 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"text/tabwriter"
-
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/match"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"os"
+	"runtime"
+	"text/tabwriter"
 )
 
 const refNameAnnotation = "org.opencontainers.image.ref.name"
@@ -132,47 +126,5 @@ func deleteImage(imageName string) error {
 	if _, err := store.GarbageCollect(); err != nil {
 		return fmt.Errorf("garbage collect image blobs: %w", err)
 	}
-	return nil
-}
-
-func createContainerRootfs(imageName string) (string, error) {
-	_, image, err := imageForName(imageName)
-	if err != nil {
-		return "", err
-	}
-	idBytes := make([]byte, 16)
-	rand.Read(idBytes)
-	rootfs := filepath.Join(containersDir, hex.EncodeToString(idBytes), "rootfs")
-	if err := extractRootfs(image, rootfs); err != nil {
-		return "", err
-	}
-	return rootfs, nil
-}
-
-func extractRootfs(image v1.Image, rootfs string) error {
-	if err := os.MkdirAll(filepath.Dir(rootfs), 0755); err != nil {
-		return err
-	}
-	if err := os.Mkdir(rootfs, 0755); err != nil {
-		return fmt.Errorf("create rootfs: %w", err)
-	}
-	complete := false
-	defer func() {
-		if !complete {
-			_ = os.RemoveAll(rootfs)
-		}
-	}()
-
-	stream := mutate.Extract(image)
-	defer stream.Close()
-	cmd := exec.Command("tar", "--extract", "--file=-", "--directory="+rootfs,
-		"--preserve-permissions", "--numeric-owner", "--delay-directory-restore")
-	cmd.Stdin = stream
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("extract rootfs: %w", err)
-	}
-	complete = true
 	return nil
 }
