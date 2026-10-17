@@ -19,6 +19,8 @@ Pull an image, view locally imported images, and run a command:
 sudo ./containerR pull alpine:latest
 sudo ./containerR images
 sudo ./containerR run alpine:latest /bin/sh
+# With no command override, run the image's configured entrypoint and command.
+sudo ./containerR run alpine:latest
 ```
 
 The local image store and extracted container filesystems are stored under
@@ -29,7 +31,12 @@ The local image store and extracted container filesystems are stored under
 | `/lib/containerR/images/oci-layout` | Identifies the OCI layout version. |
 | `/lib/containerR/images/index.json` | References saved images. |
 | `/lib/containerR/images/blobs/sha256/` | Stores manifests, configurations, and layers. |
+| `/lib/containerR/containerr.db` | SQLite database of created containers. Its schema is initialized from `schema.sql` when the database is opened. |
 | `/lib/containerR/containers/<id>/rootfs/` | Holds one container's extracted filesystem. |
+
+Each `run` creates a container record before it starts. The internal
+`container-init` command receives that record's ID (rather than a rootfs path)
+and reads the rootfs location from the database before entering the chroot.
 
 ### For Macos
 
@@ -37,8 +44,6 @@ Use to create a Linux VM
 
 ```
 limactl start --name=containerr ./lima/containerr.yaml
-
-limactl edit --mount-writable containerr
 ```
 
 and then ran all the commands in the vm as for now we didn't add support for macos

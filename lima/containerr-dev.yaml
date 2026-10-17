@@ -1,7 +1,7 @@
 minimumLimaVersion: "2.0.0"
 
 base:
-  - template:docker-rootful
+  - template:debian
 
 vmType: vz
 arch: aarch64
@@ -13,8 +13,7 @@ disk: "30GiB"
 # virtiofs is the fast file-sharing mechanism between Mac and the Lima Linux VM
 mountType: virtiofs
 mounts:
-  - location: "/Users/available/perso/containerR"
-    mountPoint: "/Users/available/perso/containerR"
+  - location: "~"
     writable: true
 
 vmOpts:
