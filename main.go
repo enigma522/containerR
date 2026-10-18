@@ -3,6 +3,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 )
@@ -14,10 +15,11 @@ const (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: containerR <run|pull|images|delete> ...")
+	fmt.Fprintln(os.Stderr, "usage: containerR <run|pull|images|ps|delete|rm> ...")
 }
 
 func main() {
+
 	if len(os.Args) < 2 {
 		usage()
 		return
@@ -77,6 +79,24 @@ func main() {
 		if err := deleteImage(os.Args[2]); err != nil {
 			fmt.Println("delete:", err)
 		}
+	case "ps":
+		fs := flag.NewFlagSet("ps", flag.ContinueOnError)
+		all := fs.Bool("all", false, "a bool")
+
+		fs.Parse(os.Args[2:])
+
+		if err := getContainers(!*all); err != nil {
+			fmt.Println("images:", err)
+		}
+	case "delete", "rm":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: containerR delete <container-id>")
+			return
+		}
+		if err := deleteContainer(os.Args[2]); err != nil {
+			fmt.Println("delete:", err)
+		}
+
 	default:
 		usage()
 	}

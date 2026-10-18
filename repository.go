@@ -53,7 +53,7 @@ func (d *SQLiteDatabase) Open() (*sql.DB, error) {
 			return
 		}
 
-		d.db, d.err = sql.Open("sqlite", d.fileName)
+		d.db, d.err = sql.Open("sqlite", d.fileName+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 		if d.err != nil {
 			return
 		}
@@ -91,6 +91,7 @@ func SharedDatabase() Database {
 type ContainerRecord struct {
 	ID, Name, ImageRef, ImageDigest, Rootfs                  string
 	Cmd, Entrypoint, Env, WorkingDir, Hostname, User, Status string
+	PID                                                      int
 }
 
 func (r ContainerRecord) GetID() string { return r.ID }
@@ -114,12 +115,12 @@ func (r *SQLiteContainerRepository) Save(record ContainerRecord) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec(`INSERT INTO CONTAINERS (id, name, image_ref, image_digest, rootfs, cmd, entrypoint, env, working_dir, hostname, user, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, image_ref=excluded.image_ref, image_digest=excluded.image_digest,
+	_, err = db.Exec(`INSERT INTO CONTAINERS (id, pid, name, image_ref, image_digest, rootfs, cmd, entrypoint, env, working_dir, hostname, user, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET pid=excluded.pid, name=excluded.name, image_ref=excluded.image_ref, image_digest=excluded.image_digest,
 		rootfs=excluded.rootfs, cmd=excluded.cmd, entrypoint=excluded.entrypoint, env=excluded.env,
 		working_dir=excluded.working_dir, hostname=excluded.hostname, user=excluded.user, status=excluded.status`,
-		record.ID, record.Name, record.ImageRef, record.ImageDigest, record.Rootfs, record.Cmd,
+		record.ID, record.PID, record.Name, record.ImageRef, record.ImageDigest, record.Rootfs, record.Cmd,
 		record.Entrypoint, record.Env, record.WorkingDir, record.Hostname, record.User, record.Status)
 	if err != nil {
 		return fmt.Errorf("save container %q: %w", record.ID, err)
@@ -132,7 +133,7 @@ func (r *SQLiteContainerRepository) GetByID(id string) (ContainerRecord, error) 
 	if err != nil {
 		return ContainerRecord{}, err
 	}
-	record, err := scanContainer(db.QueryRow(`SELECT id, name, image_ref, image_digest, rootfs, cmd, entrypoint, env, working_dir, hostname, user, status
+	record, err := scanContainer(db.QueryRow(`SELECT id, pid, name, image_ref, image_digest, rootfs, cmd, entrypoint, env, working_dir, hostname, user, status
 		FROM CONTAINERS WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return ContainerRecord{}, ErrNotFound
@@ -148,7 +149,7 @@ func (r *SQLiteContainerRepository) All() ([]ContainerRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(`SELECT id, name, image_ref, image_digest, rootfs, cmd, entrypoint, env, working_dir, hostname, user, status
+	rows, err := db.Query(`SELECT id, pid, name, image_ref, image_digest, rootfs, cmd, entrypoint, env, working_dir, hostname, user, status
 		FROM CONTAINERS ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list containers: %w", err)
@@ -194,7 +195,7 @@ type scanner interface {
 
 func scanContainer(s scanner) (ContainerRecord, error) {
 	var record ContainerRecord
-	err := s.Scan(&record.ID, &record.Name, &record.ImageRef, &record.ImageDigest,
+	err := s.Scan(&record.ID, &record.PID, &record.Name, &record.ImageRef, &record.ImageDigest,
 		&record.Rootfs, &record.Cmd, &record.Entrypoint, &record.Env, &record.WorkingDir, &record.Hostname, &record.User, &record.Status)
 	return record, err
 }
@@ -229,6 +230,11 @@ func ensureContainerSchema(db *sql.DB) error {
 	if !columns["user"] {
 		if _, err := db.Exec("ALTER TABLE CONTAINERS ADD COLUMN user TEXT NOT NULL DEFAULT ''"); err != nil {
 			return fmt.Errorf("add container user column: %w", err)
+		}
+	}
+	if !columns["pid"] {
+		if _, err := db.Exec("ALTER TABLE CONTAINERS ADD COLUMN pid INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("add container pid column: %w", err)
 		}
 	}
 	return nil

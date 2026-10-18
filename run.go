@@ -19,13 +19,8 @@ import (
 	"syscall"
 )
 
-type Container struct {
-	image      v1.Image
-	Record     ContainerRecord
-	configFile *v1.ConfigFile
-}
 
-func createContainer(imageRef string) (*Container, error) {
+func createContainer(imageRef string) (*ContainerRecord, error) {
 	_, image, err := imageForName(imageRef)
 
 	if err != nil {
@@ -77,7 +72,7 @@ func createContainer(imageRef string) (*Container, error) {
 		_ = os.RemoveAll(filepath.Dir(rootfs))
 		return nil, err
 	}
-	return &Container{image: image, Record: record, configFile: config}, nil
+	return &record, nil
 
 }
 
@@ -330,14 +325,9 @@ func parseID(value string) (int, error) {
 	return int(id), nil
 }
 
-func runContainter(container *Container, commandOverride []string) error {
-	container.Record.Status = "running"
-	if err := NewContainerRepository().Save(container.Record); err != nil {
-		return err
-	}
-
+func runContainter(container *ContainerRecord, commandOverride []string) error {
 	// Re-exec this launcher before chroot, so it need not exist in the image.
-	args := append([]string{"container-init", container.Record.ID}, commandOverride...)
+	args := append([]string{"container-init", container.ID}, commandOverride...)
 	cmd := exec.Command("/proc/self/exe", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -351,9 +341,22 @@ func runContainter(container *Container, commandOverride []string) error {
 		Unshareflags: syscall.CLONE_NEWNS,
 	}
 
-	err := cmd.Run()
-	container.Record.Status = "exited"
-	if saveErr := NewContainerRepository().Save(container.Record); saveErr != nil && err == nil {
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start container: %w", err)
+	}
+	container.PID = cmd.Process.Pid
+	container.Status = "running"
+	if err := NewContainerRepository().Save(*container); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return fmt.Errorf("save running container: %w", err)
+	}
+
+	err := cmd.Wait()
+
+	container.PID = 0
+	container.Status = "exited"
+	if saveErr := NewContainerRepository().Save(*container); saveErr != nil && err == nil {
 		return saveErr
 	}
 	return err
