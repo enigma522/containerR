@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
+	"golang.org/x/sys/unix"
 )
 
 
@@ -141,11 +141,11 @@ func initContainer(containerID string, commandOverride []string) error {
 	// Keep namespace-sensitive setup and exec on the same OS thread.
 	runtime.LockOSThread()
 
-	if err := syscall.Sethostname([]byte(hostname)); err != nil {
+	if err := unix.Sethostname([]byte(hostname)); err != nil {
 		return fmt.Errorf("set hostname: %w", err)
 	}
 
-	if err := syscall.Chroot(container.Rootfs); err != nil {
+	if err := unix.Chroot(container.Rootfs); err != nil {
 		return fmt.Errorf("chroot: %w", err)
 	}
 	if err := os.Chdir("/"); err != nil {
@@ -155,7 +155,7 @@ func initContainer(containerID string, commandOverride []string) error {
 		return err
 	}
 
-	if err := syscall.Mount("proc", "/proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""); err != nil {
+	if err := unix.Mount("proc", "/proc", "proc", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
 		return fmt.Errorf("mount /proc: %w", err)
 	}
 
@@ -176,7 +176,7 @@ func initContainer(containerID string, commandOverride []string) error {
 	}
 
 	// Replaces the running container-init program with the configured command.
-	return syscall.Exec(path, command, os.Environ())
+	return unix.Exec(path, command, os.Environ())
 }
 
 func containerCommand(container ContainerRecord, commandOverride []string) ([]string, error) {
@@ -252,13 +252,13 @@ func applyContainerUser(spec string) error {
 			return err
 		}
 	}
-	if err := syscall.Setgroups([]int{gid}); err != nil {
+	if err := unix.Setgroups([]int{gid}); err != nil {
 		return fmt.Errorf("set container groups: %w", err)
 	}
-	if err := syscall.Setgid(gid); err != nil {
+	if err := unix.Setgid(gid); err != nil {
 		return fmt.Errorf("set container gid: %w", err)
 	}
-	if err := syscall.Setuid(uid); err != nil {
+	if err := unix.Setuid(uid); err != nil {
 		return fmt.Errorf("set container uid: %w", err)
 	}
 	return nil
@@ -335,10 +335,10 @@ func runContainter(container *ContainerRecord, commandOverride []string) error {
 
 	// CLONE_NEWUTS: creates a new UTS (Unix Time-Sharing) namespace This isolates the hostname and domain name
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWPID | syscall.CLONE_NEWUTS,
+	cmd.SysProcAttr = &unix.SysProcAttr{
+		Cloneflags: unix.CLONE_NEWPID | unix.CLONE_NEWUTS,
 		// Go also makes inherited mounts recursively private for CLONE_NEWNS.
-		Unshareflags: syscall.CLONE_NEWNS,
+		Unshareflags: unix.CLONE_NEWNS,
 	}
 
 	if err := cmd.Start(); err != nil {

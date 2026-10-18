@@ -15,7 +15,7 @@ const (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: containerR <run|pull|images|ps|delete|rm> ...")
+	fmt.Fprintln(os.Stderr, "usage: containerR <run|start|pull|images|ps|delete|rm> ...")
 }
 
 func main() {
@@ -87,6 +87,14 @@ func main() {
 
 		if err := getContainers(!*all); err != nil {
 			fmt.Println("images:", err)
+		}
+	case "start":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: containerR start <container-id>")
+			return
+		}
+		if err := startContainer(os.Args[2]); err != nil {
+			fmt.Println("start:", err)
 		}
 	case "delete", "rm":
 		if len(os.Args) != 3 {
