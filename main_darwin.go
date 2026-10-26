@@ -11,6 +11,7 @@ const (
 	containerRoot = "/lib/containerR"
 	imagesDir     = containerRoot + "/images"
 	containersDir = containerRoot + "/containers"
+	databaseFile  = containerRoot + "/containerr.db"
 )
 
 func main() {

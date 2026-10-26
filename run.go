@@ -10,15 +10,15 @@ import (
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"golang.org/x/sys/unix"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"golang.org/x/sys/unix"
+	"syscall"
 )
-
 
 func createContainer(imageRef string) (*ContainerRecord, error) {
 	_, image, err := imageForName(imageRef)
@@ -333,12 +333,28 @@ func runContainter(container *ContainerRecord, commandOverride []string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// CLONE_NEWUTS: creates a new UTS (Unix Time-Sharing) namespace This isolates the hostname and domain name
-
+	// Create a user namespace first so the process can be namespace-root
+	// without being root on the host. The other namespaces are then owned by
+	// this user namespace.
 	cmd.SysProcAttr = &unix.SysProcAttr{
-		Cloneflags: unix.CLONE_NEWPID | unix.CLONE_NEWUTS,
+		Cloneflags: unix.CLONE_NEWUSER | unix.CLONE_NEWPID | unix.CLONE_NEWUTS,
 		// Go also makes inherited mounts recursively private for CLONE_NEWNS.
 		Unshareflags: unix.CLONE_NEWNS,
+
+
+		// map container UID 0 (root) to the current host user's UID.
+		UidMappings: []syscall.SysProcIDMap{
+			{ContainerID: 0, HostID: os.Getuid(), Size: 1},
+		},
+
+		// map container GID 0 (root group) to the current host user's GID.
+		GidMappings: []syscall.SysProcIDMap{
+			{ContainerID: 0, HostID: os.Getgid(), Size: 1},
+		},
+
+		// to disable setgroups() so we can configure the GID mapping without elevated privileges
+		// setgroups() inux system call that sets the supplementary groups of a process
+		GidMappingsEnableSetgroups: false,
 	}
 
 	if err := cmd.Start(); err != nil {

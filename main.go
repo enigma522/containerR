@@ -6,19 +6,37 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
-const (
-	containerRoot = "/lib/containerR"
-	imagesDir     = containerRoot + "/images"
-	containersDir = containerRoot + "/containers"
+var (
+	containerRoot string
+	imagesDir     string
+	containersDir string
+	databaseFile  string
 )
+
+func initStoragePaths() error {
+	home, _ := os.UserHomeDir()
+	root := filepath.Join(home, ".local", "share", "containerR")
+
+	containerRoot = root
+	imagesDir = filepath.Join(root, "images")
+	containersDir = filepath.Join(root, "containers")
+	databaseFile = filepath.Join(root, "containerr.db")
+
+	return os.MkdirAll(root, 0755)
+}
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: containerR <run|start|pull|images|ps|delete|rm> ...")
 }
 
 func main() {
+	if err := initStoragePaths(); err != nil {
+		fmt.Fprintln(os.Stderr, "storage:", err)
+		os.Exit(1)
+	}
 
 	if len(os.Args) < 2 {
 		usage()

@@ -14,8 +14,6 @@ import (
 
 var ErrNotFound = errors.New("record not found")
 
-const databaseFile = containerRoot + "/containerr.db"
-
 //go:embed schema.sql
 var schemaFS embed.FS
 
@@ -80,9 +78,17 @@ func (d *SQLiteDatabase) Open() (*sql.DB, error) {
 	return d.db, d.err
 }
 
-var sharedDatabase = NewSQLiteDatabase(databaseFile)
+var (
+	sharedDatabase   Database
+	sharedDatabaseMu sync.Mutex
+)
 
 func SharedDatabase() Database {
+	sharedDatabaseMu.Lock()
+	defer sharedDatabaseMu.Unlock()
+	if sharedDatabase == nil {
+		sharedDatabase = NewSQLiteDatabase(databaseFile)
+	}
 	return sharedDatabase
 }
 
